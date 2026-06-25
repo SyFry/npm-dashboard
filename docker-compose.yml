@@ -1,0 +1,56 @@
+name: npm-dashboard
+
+services:
+  loki:
+    image: grafana/loki:${LOKI_VERSION:-3.4.0}
+    container_name: npm-dash-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./config/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    networks: [npmdash]
+
+  alloy:
+    image: grafana/alloy:${ALLOY_VERSION:-v1.9.2}
+    container_name: npm-dash-alloy
+    restart: unless-stopped
+    user: root   # NPM logs are root-owned; Alloy needs read access
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./config/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      - ${NPM_LOG_DIR:?NPM_LOG_DIR is not set — run ./setup.sh or set it in .env}:/npmlogs:ro
+    depends_on: [loki]
+    networks: [npmdash]
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-11.6.0}
+    container_name: npm-dash-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: [loki]
+    networks: [npmdash]
+
+volumes:
+  loki-data:
+  alloy-data:
+  grafana-data:
+
+networks:
+  npmdash:
+    driver: bridge

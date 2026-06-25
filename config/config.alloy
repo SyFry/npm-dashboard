@@ -1,0 +1,46 @@
+// Grafana Alloy — tails NPM per-proxy-host access logs and ships to Loki.
+// Promtail is EOL (2026-03-02); Alloy is its supported successor.
+
+// Discover NPM access logs (access only — error/letsencrypt/fallback excluded).
+local.file_match "npm" {
+  path_targets = [
+    { __path__ = "/npmlogs/proxy-host-*_access.log", job = "npm_proxy" },
+  ]
+}
+
+loki.source.file "npm" {
+  targets       = local.file_match.npm.targets
+  forward_to    = [loki.process.npm.receiver]
+  tail_from_end = true   // true = only new lines. Set false (and clear the
+                         // alloy-data volume) to backfill existing history.
+                         // See README "Backfilling historical logs".
+}
+
+// Parse NPM's 'proxy' log_format; promote low-cardinality fields to labels.
+loki.process "npm" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.regex {
+    expression = "^\\[(?P<time>[^\\]]+)\\] (?P<cache_status>\\S+) (?P<upstream_status>\\S+) (?P<status>\\d{3}) - (?P<method>\\S+) (?P<scheme>\\S+) (?P<host>\\S+) \"(?P<path>[^\"]*)\" \\[Client (?P<client_ip>[^\\]]+)\\] \\[Length (?P<bytes>\\d+)\\]"
+  }
+
+  stage.labels {
+    values = {
+      host         = "",
+      status       = "",
+      method       = "",
+      cache_status = "",
+    }
+  }
+
+  stage.timestamp {
+    source = "time"
+    format = "02/Jan/2006:15:04:05 -0700"
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

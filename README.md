@@ -6,7 +6,7 @@ It tails NPM's per-proxy-host access logs, parses them, and gives you per-domain
 
 No Promtail (it's [EOL as of March 2026](https://grafana.com/docs/loki/latest/send-data/promtail/)); this uses its supported successor, **Grafana Alloy**.
 
-![dashboard](docs/dashboard.png)
+![dashboard](dashboard.png)
 
 ## Features
 
